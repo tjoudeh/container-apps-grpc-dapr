@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+option csharp_namespace = "Expenses.Grpc.Server";
+
+message ExpenseModel{
+    int32 id =1;
+    string provider =2;
+    double amount =3; 
+    string category = 4;
+    string owner = 5;
+    int32 workflowstatus = 6;
+    optional string description = 7;
+}
+
+message GetExpensesRequest {
+    string owner = 1;
+}
+
+message GetExpensesResponse {
+    repeated ExpenseModel expenses = 1;
+}
+
+message GetExpenseByIdRequest {
+    int32 id = 1;
+}
+
+message GetExpenseByIdResponse {
+    ExpenseModel expense = 1;
+}
+
+message AddExpenseRequest {
+    string provider =1;
+    double amount =2; 
+    string category = 3;
+    string owner = 4;
+    int32 workflowstatus = 5;
+    optional string description = 6;
+}
+
+message AddExpenseResponse {
+    ExpenseModel expense = 1;
+}
+
+service ExpenseSvc {
+    rpc GetExpenses(GetExpensesRequest) returns (GetExpensesResponse) {}
+    rpc GetExpenseById(GetExpenseByIdRequest) returns (GetExpenseByIdResponse) {}
+    rpc AddExpense(AddExpenseRequest) returns (AddExpenseResponse) {}
+}
