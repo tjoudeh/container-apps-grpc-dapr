@@ -7,55 +7,12 @@ namespace Expenses.Grpc.Server.Services
     {
 
         private readonly ILogger<ExpenseService> _logger;
-        private static List<ExpenseModel> _expensesList = new List<ExpenseModel>();
+        private readonly IExpensesRepo _expensesRepo;
 
-        private void GenerateRandomExpenses()
-        {
-
-            if (_expensesList.Count > 0)
-            {
-                return;
-            }
-
-            _logger.LogInformation("Generating Random Expenses");
-
-            _expensesList.Add(new ExpenseModel
-            {
-                Id = 1,
-                Provider = "Golds Gym",
-                Amount = 290,
-                Category = "Fitness Activity",
-                Owner = "tjoudeh@mail.com",
-                Workflowstatus = 1,
-                Description = ""
-            });
-
-            _expensesList.Add(new ExpenseModel
-            {
-                Id = 2,
-                Provider = "Adidas",
-                Amount = 100,
-                Category = "Athletic Shoes",
-                Owner = "tjoudeh@mail.com",
-                Workflowstatus = 1,
-                Description = ""
-            });
-
-            _expensesList.Add(new ExpenseModel
-            {
-                Id = 3,
-                Provider = "FreeMind",
-                Amount = 25,
-                Category = "Yoga Class",
-                Owner = "xyz@yahoo.com",
-                Workflowstatus = 2,
-                Description = ""
-            });
-        }
-
-        public ExpenseService(ILogger<ExpenseService> logger)
+        public ExpenseService(IExpensesRepo expensesRepo, ILogger<ExpenseService> logger)
         {
             _logger = logger;
+            _expensesRepo = expensesRepo;
             _logger.LogInformation("Invoking Constructor");
             var daprGRPCPort = Environment.GetEnvironmentVariable("DAPR_GRPC_PORT");
 
@@ -64,7 +21,6 @@ namespace Expenses.Grpc.Server.Services
                 _logger.LogInformation("Instantiating gRPC server using dapr sidecar on gRPC port: {daprGRPCPort}", daprGRPCPort);
             }
 
-            GenerateRandomExpenses();
         }
 
         public override Task<GetExpensesResponse> GetExpenses(GetExpensesRequest request, ServerCallContext context)
@@ -74,8 +30,7 @@ namespace Expenses.Grpc.Server.Services
 
             var response = new GetExpensesResponse();
 
-            var filteredResults = _expensesList.Where(
-                                    f => f.Owner.Equals(request.Owner, StringComparison.CurrentCultureIgnoreCase));
+            var filteredResults =  _expensesRepo.GetExpensesByOwner(request.Owner);
 
             response.Expenses.AddRange(filteredResults);
 
@@ -89,11 +44,8 @@ namespace Expenses.Grpc.Server.Services
 
             var response = new AddExpenseResponse();
 
-            var id = _expensesList.Max(e => e.Id) + 1;
-
             var expenseModel = new ExpenseModel()
             {
-                Id = id,
                 Owner = request.Owner,
                 Amount = request.Amount,
                 Category = request.Category,
@@ -102,7 +54,7 @@ namespace Expenses.Grpc.Server.Services
                 Description = request.Description
             };
 
-            _expensesList.Add(expenseModel);
+            _expensesRepo.AddExpense(expenseModel);
 
             response.Expense = expenseModel;
 
@@ -115,7 +67,7 @@ namespace Expenses.Grpc.Server.Services
 
             var response = new GetExpenseByIdResponse();
 
-            var expense = _expensesList.SingleOrDefault(e => e.Id == request.Id);
+            var expense = _expensesRepo.GetExpenseById(request.Id);
 
             response.Expense = expense;
 
