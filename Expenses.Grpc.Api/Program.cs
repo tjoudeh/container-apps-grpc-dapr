@@ -1,6 +1,7 @@
 using Expenses.Grpc.Server;
 using Grpc.Core;
 using Grpc.Net.Client;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
 using System.Xml.Linq;
 using static Grpc.Core.Metadata;
@@ -19,6 +20,14 @@ builder.Services.AddGrpcClient<ExpenseSvc.ExpenseSvcClient>(o =>
     {
         var port = "7029";
         var scheme = "https";
+        var daprGRPCPort = Environment.GetEnvironmentVariable("DAPR_GRPC_PORT");
+
+        if (!string.IsNullOrEmpty(daprGRPCPort))
+        {
+            scheme = "http";
+            port = daprGRPCPort;
+        }
+
         serverAddress = string.Format(builder.Configuration.GetValue<string>("grpc:server"), scheme, port);
     }
     else
@@ -40,19 +49,19 @@ app.MapGet("/api/expenses", async (ExpenseSvc.ExpenseSvcClient grpcClient, strin
 
     var request = new GetExpensesRequest { Owner = owner };
 
-    var response = await grpcClient.GetExpensesAsync(request);
+    var response = await grpcClient.GetExpensesAsync(request, BuildMetadataHeader());
 
     return Results.Ok(response.Expenses);
 
 });
 
-app.MapGet("/api/expenses/{id}", async (ExpenseSvc.ExpenseSvcClient grpcClient,int id) =>
+app.MapGet("/api/expenses/{id}", async (ExpenseSvc.ExpenseSvcClient grpcClient, int id) =>
 {
     app?.Logger.LogInformation("Calling grpc server (GetExpenseByIdRequest) for id: {id}", id);
 
     var request = new GetExpenseByIdRequest { Id = id };
 
-    var response = await grpcClient.GetExpenseByIdAsync(request);
+    var response = await grpcClient.GetExpenseByIdAsync(request, BuildMetadataHeader());
 
     return Results.Ok(response.Expense);
 
@@ -69,10 +78,28 @@ app.MapPost("/api/expenses", async (ExpenseSvc.ExpenseSvcClient grpcClient, Expe
                                         Workflowstatus = expenseModel.Workflowstatus, 
                                         Description = expenseModel.Description };
 
-    var response = await grpcClient.AddExpenseAsync(request);
+    var response = await grpcClient.AddExpenseAsync(request, BuildMetadataHeader());
 
     return Results.CreatedAtRoute("GetExpenseById", new { id = response.Expense.Id }, response.Expense);
 });
+
+Metadata? BuildMetadataHeader()
+{
+    //The gRPC port that the Dapr sidecar is listening on
+    var daprGRPCPort = Environment.GetEnvironmentVariable("DAPR_GRPC_PORT");
+
+    Metadata? metadata = null;
+
+    if (!string.IsNullOrEmpty(daprGRPCPort))
+    {
+        metadata = new Metadata();
+        var serverDaprAppId = "expenses-grpc-server";
+        metadata.Add("dapr-app-id", serverDaprAppId);
+        app?.Logger.LogInformation("Calling gRPC server app id '{server}' using dapr sidecar on gRPC port: {daprGRPCPort}", serverDaprAppId, daprGRPCPort);
+    }
+
+    return metadata;
+}
 
 app.Run();
 

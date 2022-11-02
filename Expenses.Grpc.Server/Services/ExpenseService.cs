@@ -1,4 +1,5 @@
 ﻿using Grpc.Core;
+using System.Collections;
 
 namespace Expenses.Grpc.Server.Services
 {
@@ -10,7 +11,7 @@ namespace Expenses.Grpc.Server.Services
 
         private void GenerateRandomExpenses()
         {
-         
+
             if (_expensesList.Count > 0)
             {
                 return;
@@ -56,6 +57,13 @@ namespace Expenses.Grpc.Server.Services
         {
             _logger = logger;
             _logger.LogInformation("Invoking Constructor");
+            var daprGRPCPort = Environment.GetEnvironmentVariable("DAPR_GRPC_PORT");
+
+            if (!string.IsNullOrEmpty(daprGRPCPort))
+            {
+                _logger.LogInformation("Instantiating gRPC server using dapr sidecar on gRPC port: {daprGRPCPort}", daprGRPCPort);
+            }
+
             GenerateRandomExpenses();
         }
 
@@ -82,7 +90,7 @@ namespace Expenses.Grpc.Server.Services
             var response = new AddExpenseResponse();
 
             var id = _expensesList.Max(e => e.Id) + 1;
-            
+
             var expenseModel = new ExpenseModel()
             {
                 Id = id,
@@ -118,4 +126,3 @@ namespace Expenses.Grpc.Server.Services
     }
 
 }
- 
