@@ -1,14 +1,13 @@
+using Dapr.Client;
 using Expenses.Grpc.Server;
 using Grpc.Core;
-using Grpc.Net.Client;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using System;
-using System.Xml.Linq;
-using static Grpc.Core.Metadata;
+using static Dapr.Client.Autogen.Grpc.v1.Dapr;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+builder.Services.AddDaprClient();
 
 builder.Services.AddGrpcClient<ExpenseSvc.ExpenseSvcClient>(o =>
 {
@@ -42,43 +41,75 @@ var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 
-app.MapGet("/api/expenses", async (ExpenseSvc.ExpenseSvcClient grpcClient, string owner) =>
+app.MapGet("/api/expenses", async (ExpenseSvc.ExpenseSvcClient grpcClient, Dapr.Client.DaprClient daprClient, string owner) =>
 {
+    GetExpensesResponse? response;
     
-    app?.Logger.LogInformation("Calling grpc server (GetExpensesAsync) for owner: {owner}", owner);
-
     var request = new GetExpensesRequest { Owner = owner };
 
-    var response = await grpcClient.GetExpensesAsync(request, BuildMetadataHeader());
+    if (builder.Configuration.GetValue("grpc:daprClientSDK", false))
+    {
+        app?.Logger.LogInformation("DaprClientSDK::Calling grpc server (GetExpenses) for owner: {owner}", owner);
+
+        response = await daprClient.InvokeMethodGrpcAsync<GetExpensesRequest, GetExpensesResponse>("expenses-grpc-server", "GetExpenses", request);
+    }
+    else
+    {
+        app?.Logger.LogInformation("Calling grpc server (GetExpenses) for owner: {owner}", owner);
+
+        response = await grpcClient.GetExpensesAsync(request, BuildMetadataHeader());
+    }
 
     return Results.Ok(response.Expenses);
 
 });
 
-app.MapGet("/api/expenses/{id}", async (ExpenseSvc.ExpenseSvcClient grpcClient, int id) =>
+app.MapGet("/api/expenses/{id}", async (ExpenseSvc.ExpenseSvcClient grpcClient, Dapr.Client.DaprClient daprClient, int id) =>
 {
-    app?.Logger.LogInformation("Calling grpc server (GetExpenseByIdRequest) for id: {id}", id);
+    GetExpenseByIdResponse? response;
 
     var request = new GetExpenseByIdRequest { Id = id };
 
-    var response = await grpcClient.GetExpenseByIdAsync(request, BuildMetadataHeader());
+    if (builder.Configuration.GetValue("grpc:daprClientSDK", false))
+    {
+        app?.Logger.LogInformation("DaprClientSDK::Calling grpc server (GetExpenseByIdRequest) for id: {id}", id);
+        response = await daprClient.InvokeMethodGrpcAsync<GetExpenseByIdRequest, GetExpenseByIdResponse>("expenses-grpc-server", "GetExpenseById", request);
+    }
+    else
+    {
+        app?.Logger.LogInformation("Calling grpc server (GetExpenseByIdRequest) for id: {id}", id);
+        response = await grpcClient.GetExpenseByIdAsync(request, BuildMetadataHeader());
+    }
 
     return Results.Ok(response.Expense);
 
 }).WithName("GetExpenseById");
 
-app.MapPost("/api/expenses", async (ExpenseSvc.ExpenseSvcClient grpcClient, ExpenseModel expenseModel) =>
+app.MapPost("/api/expenses", async (ExpenseSvc.ExpenseSvcClient grpcClient, Dapr.Client.DaprClient daprClient,ExpenseModel expenseModel) =>
 {
-    app?.Logger.LogInformation("Calling grpc server (AddExpenseRequest) for provider: {provider}", expenseModel.Provider);
-   
-    var request = new AddExpenseRequest { Provider = expenseModel.Provider, 
-                                        Amount = expenseModel.Amount, 
-                                        Category = expenseModel.Category, 
-                                        Owner = expenseModel.Owner, 
-                                        Workflowstatus = expenseModel.Workflowstatus, 
-                                        Description = expenseModel.Description };
 
-    var response = await grpcClient.AddExpenseAsync(request, BuildMetadataHeader());
+    AddExpenseResponse? response;
+
+    var request = new AddExpenseRequest
+    {
+        Provider = expenseModel.Provider,
+        Amount = expenseModel.Amount,
+        Category = expenseModel.Category,
+        Owner = expenseModel.Owner,
+        Workflowstatus = expenseModel.Workflowstatus,
+        Description = expenseModel.Description
+    };
+
+    if (builder.Configuration.GetValue("grpc:daprClientSDK", false))
+    {
+        app?.Logger.LogInformation("DaprClientSDK::Calling grpc server (AddExpenseRequest) for provider: {provider}", expenseModel.Provider);
+        response = await daprClient.InvokeMethodGrpcAsync<AddExpenseRequest, AddExpenseResponse>("expenses-grpc-server", "AddExpense", request);
+    }
+    else
+    {
+        app?.Logger.LogInformation("Calling grpc server (AddExpenseRequest) for provider: {provider}", expenseModel.Provider);
+        response = await grpcClient.AddExpenseAsync(request, BuildMetadataHeader());
+    }
 
     return Results.CreatedAtRoute("GetExpenseById", new { id = response.Expense.Id }, response.Expense);
 });
